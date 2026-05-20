@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eloquent Reflection — 沉浸式心靈復盤</title>
+  <style>
+    /* ===== DARK (預設) ===== */
+    :root {
+      --bg:           #0D0D1A;
+      --surface:      #12122A;
+      --surface-2:    #1A1A35;
+      --shadow-dark:  #07071A;
+      --shadow-light: #1F1F40;
+      --purple:       #8B5CF6;
+      --purple-glow:  rgba(139,92,246,0.4);
+      --cyan:         #06B6D4;
+      --cyan-glow:    rgba(6,182,212,0.4);
+      --gold:         #F59E0B;
+      --gold-glow:    rgba(245,158,11,0.4);
+      --blue:         #3B82F6;
+      --green:        #10B981;
+      --text:         #E2E8F0;
+      --text-muted:   #64748B;
+      --border:       rgba(139,92,246,0.2);
+      --scanline:     rgba(0,0,0,0.04);
+      --toggle-icon:  "☀";
+    }
+
+    /* ===== LIGHT ===== */
+    :root[data-theme="light"] {
+      --bg:           #F2EEF9;
+      --surface:      #EAE4F5;
+      --surface-2:    #DDD6EF;
+      --shadow-dark:  rgba(140,120,200,0.3);
+      --shadow-light: rgba(255,255,255,0.88);
+      --purple:       #7C3AED;
+      --purple-glow:  rgba(124,58,237,0.25);
+      --cyan:         #0891B2;
+      --cyan-glow:    rgba(8,145,178,0.25);
+      --gold:         #D97706;
+      --gold-glow:    rgba(217,119,6,0.25);
+      --blue:         #1D4ED8;
+      --green:        #047857;
+      --text:         #1E1B4B;
+      --text-muted:   #6B6893;
+      --border:       rgba(124,58,237,0.2);
+      --scanline:     rgba(100,80,180,0.025);
+      --toggle-icon:  "☽";
+    }
+
+    /* 系統設定為淺色 且 未手動覆蓋時 */
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg:           #F2EEF9;
+        --surface:      #EAE4F5;
+        --surface-2:    #DDD6EF;
+        --shadow-dark:  rgba(140,120,200,0.3);
+        --shadow-light: rgba(255,255,255,0.88);
+        --purple:       #7C3AED;
+        --purple-glow:  rgba(124,58,237,0.25);
+        --cyan:         #0891B2;
+        --cyan-glow:    rgba(8,145,178,0.25);
+        --gold:         #D97706;
+        --gold-glow:    rgba(217,119,6,0.25);
+        --blue:         #1D4ED8;
+        --green:        #047857;
+        --text:         #1E1B4B;
+        --text-muted:   #6B6893;
+        --border:       rgba(124,58,237,0.2);
+        --scanline:     rgba(100,80,180,0.025);
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background 0.35s ease, color 0.35s ease;
+    }
+
+    /* Scanlines */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0px, transparent 2px,
+        var(--scanline) 2px, var(--scanline) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .app {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      position: relative;
+    }
+    .logo {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      background: linear-gradient(135deg, var(--purple) 30%, var(--cyan) 70%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      margin-top: 0.4rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .date-badge {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.3rem 1rem;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 0.7rem;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      box-shadow: 0 0 10px rgba(6,182,212,0.12);
+      transition: background 0.35s, color 0.35s;
+    }
+
+    /* ===== THEME TOGGLE ===== */
+    .theme-toggle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: 4px 4px 8px var(--shadow-dark), -2px -2px 6px var(--shadow-light);
+      cursor: pointer;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .theme-toggle:hover {
+      color: var(--text);
+      box-shadow: 4px 4px 10px var(--shadow-dark), -2px -2px 8px var(--shadow-light), 0 0 8px var(--purple-glow);
+    }
+    .theme-toggle:active {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -1px -1px 4px var(--shadow-light);
+    }
+    .toggle-icon {
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 0.4s ease;
+    }
+    .theme-toggle:hover .toggle-icon { transform: rotate(20deg) scale(1.15); }
+
+    /* ===== LAYOUT ===== */
+    .grid-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr 260px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    /* ===== CARD ===== */
+    .card {
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 1.5rem;
+      border: 1px solid var(--border);
+      box-shadow:
+        8px 8px 16px var(--shadow-dark),
+        -4px -4px 12px var(--shadow-light);
+      transition: background 0.35s, box-shadow 0.35s, border-color 0.35s;
+    }
+    .card-title {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.25em;
+      color: var(--purple);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ===== LEFT: CONTRIBUTION GRID ===== */
+    .contrib-months {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 4px;
+      min-height: 14px;
+    }
+    .contrib-cells { display: flex; gap: 3px; }
+    .contrib-week  { display: flex; flex-direction: column; gap: 3px; }
+    .contrib-cell {
+      width: 13px; height: 13px;
+      border-radius: 3px;
+      background: var(--surface-2);
+      box-shadow: 2px 2px 4px var(--shadow-dark), -1px -1px 3px var(--shadow-light);
+      cursor: pointer;
+      transition: transform 0.15s, background 0.35s, box-shadow 0.35s;
+      flex-shrink: 0;
+    }
+    .contrib-cell:hover { transform: scale(1.3); }
+    .contrib-cell.lv1 { background: rgba(139,92,246,0.25); box-shadow: 0 0 5px rgba(139,92,246,0.3); }
+    .contrib-cell.lv2 { background: rgba(139,92,246,0.55); box-shadow: 0 0 7px rgba(139,92,246,0.5); }
+    .contrib-cell.lv3 { background: var(--purple);         box-shadow: 0 0 10px var(--purple-glow); }
+    .contrib-cell.today {
+      border: 1px solid var(--cyan);
+      box-shadow: 0 0 8px var(--cyan-glow) !important;
+    }
+    .streak-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface-2);
+      border-radius: 12px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
+      transition: background 0.35s, box-shadow 0.35s;
+    }
+    .streak-num {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--gold);
+      text-shadow: 0 0 12px var(--gold-glow);
+      line-height: 1;
+    }
+    .streak-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-top: 3px;
+    }
+    .month-stat { text-align: right; }
+    .month-stat-label { font-size: 0.6rem; color: var(--text-muted); }
+    .month-stat-val {
+      font-size: 1.3rem;
+      color: var(--cyan);
+      text-shadow: 0 0 8px var(--cyan-glow);
+    }
+
+    /* ===== CENTER: FORM ===== */
+    .form-section { display: flex; flex-direction: column; gap: 1.5rem; }
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: -0.5rem;
+    }
+    .step-dots { display: flex; gap: 6px; }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      box-shadow: 2px 2px 4px var(--shadow-dark), -1px -1px 3px var(--shadow-light);
+      transition: all 0.3s;
+    }
+    .dot.active { background: var(--purple); box-shadow: 0 0 8px var(--purple-glow); }
+    .dot.done   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan-glow);   }
+    .step-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.1em;
+    }
+    .energy-big {
+      font-size: 3.5rem;
+      font-weight: 700;
+      text-align: center;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan-glow);
+      line-height: 1;
+      transition: color 0.3s, text-shadow 0.3s;
+    }
+    .slider-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      margin: 0.4rem 0 0.5rem;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--surface-2);
+      box-shadow: inset 2px 2px 4px var(--shadow-dark), inset -1px -1px 3px var(--shadow-light);
+      outline: none;
+      cursor: pointer;
+      transition: background 0.35s, box-shadow 0.35s;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--purple);
+      box-shadow: 0 0 10px var(--purple-glow), 3px 3px 6px var(--shadow-dark), -2px -2px 4px var(--shadow-light);
+      cursor: pointer;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 20px var(--purple-glow), 3px 3px 6px var(--shadow-dark);
+      transform: scale(1.1);
+    }
+    .win-textarea {
+      width: 100%;
+      background: var(--surface-2);
+      border: none;
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      resize: none;
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -2px -2px 6px var(--shadow-light);
+      outline: none;
+      transition: box-shadow 0.3s, background 0.35s, color 0.35s;
+    }
+    .win-textarea:focus {
+      box-shadow:
+        inset 4px 4px 8px var(--shadow-dark),
+        inset -2px -2px 6px var(--shadow-light),
+        0 0 0 2px rgba(6,182,212,0.3);
+    }
+    .win-textarea::placeholder { color: var(--text-muted); }
+    .win-textarea.error {
+      box-shadow:
+        inset 4px 4px 8px var(--shadow-dark),
+        inset -2px -2px 6px var(--shadow-light),
+        0 0 0 2px rgba(239,68,68,0.4);
+    }
+    .mood-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .mood-tag {
+      padding: 0.45rem 0.9rem;
+      border-radius: 20px;
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-family: 'Courier New', monospace;
+      box-shadow: 4px 4px 8px var(--shadow-dark), -2px -2px 6px var(--shadow-light);
+      transition: all 0.2s;
+    }
+    .mood-tag:hover { color: var(--text); transform: translateY(-1px); }
+    .mood-tag.selected {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -1px -1px 4px var(--shadow-light);
+    }
+    .mood-tag[data-mood="平靜"].selected { border-color:var(--purple); color:var(--purple); text-shadow:0 0 6px var(--purple-glow); }
+    .mood-tag[data-mood="焦慮"].selected { border-color:var(--blue);   color:var(--blue);   text-shadow:0 0 6px rgba(59,130,246,0.4); }
+    .mood-tag[data-mood="充實"].selected { border-color:var(--gold);   color:var(--gold);   text-shadow:0 0 6px var(--gold-glow); }
+    .mood-tag[data-mood="感恩"].selected { border-color:var(--green);  color:var(--green);  text-shadow:0 0 6px rgba(16,185,129,0.4); }
+    .mood-tag[data-mood="疲憊"].selected { border-color:#6B7280;       color:var(--text-muted); }
+
+    .submit-btn {
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      color: #fff;
+      font-size: 0.9rem;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        0 0 20px var(--purple-glow),
+        4px 4px 8px var(--shadow-dark),
+        -2px -2px 6px var(--shadow-light);
+      transition: box-shadow 0.3s, transform 0.2s;
+    }
+    .submit-btn::after {
+      content: '';
+      position: absolute;
+      top: -50%; left: -60%;
+      width: 40%; height: 200%;
+      background: rgba(255,255,255,0.15);
+      transform: skewX(-20deg);
+      transition: left 0.5s;
+    }
+    .submit-btn:hover::after { left: 130%; }
+    .submit-btn:hover {
+      box-shadow: 0 0 40px var(--purple-glow), 0 0 20px var(--cyan-glow), 4px 4px 8px var(--shadow-dark);
+      transform: translateY(-2px);
+    }
+    .submit-btn:active {
+      transform: translateY(0);
+      box-shadow: inset 3px 3px 6px rgba(0,0,0,0.2), 0 0 20px var(--purple-glow);
+    }
+
+    /* ===== RIGHT: PIXEL GEM ===== */
+    .gem-panel { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
+    #pixelCanvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border-radius: 8px;
+      transition: filter 0.4s;
+    }
+    .gem-name {
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      text-align: center;
+      transition: color 0.5s, text-shadow 0.5s;
+    }
+    .gem-hint {
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      text-align: center;
+    }
+    .stats-block { width: 100%; }
+    .stat-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .stat-lbl { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; width: 32px; }
+    .stat-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--surface-2);
+      border-radius: 2px;
+      box-shadow: inset 1px 1px 3px var(--shadow-dark);
+      overflow: hidden;
+      transition: background 0.35s;
+    }
+    .stat-fill { height: 100%; border-radius: 2px; transition: width 0.7s ease; }
+    .stat-val { font-size: 0.6rem; color: var(--text-muted); width: 26px; text-align: right; }
+
+    /* ===== TOAST ===== */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: var(--surface);
+      border: 1px solid var(--purple);
+      border-radius: 14px;
+      padding: 1rem 2rem;
+      box-shadow: 0 0 24px var(--purple-glow);
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), background 0.35s;
+      z-index: 10000;
+      text-align: center;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast-title { color: var(--cyan); font-size: 0.9rem; margin-bottom: 0.3rem; }
+    .toast-sub { font-size: 0.7rem; color: var(--text-muted); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1100px) {
+      .grid-layout { grid-template-columns: 1fr 1fr; }
+      .grid-layout > :last-child { grid-column: span 2; }
+    }
+    @media (max-width: 680px) {
+      .grid-layout { grid-template-columns: 1fr; }
+      .grid-layout > :last-child { grid-column: auto; }
+      .logo { font-size: 1.4rem; }
+      .theme-toggle { position: static; margin: 0.75rem auto 0; display: inline-flex; }
+      header { padding-bottom: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">ELOQUENT REFLECTION</div>
+    <div class="tagline">沉浸式心靈復盤 · 每日一格 · 精靈伴生</div>
+    <div class="date-badge" id="dateBadge"></div>
+
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="切換深色/淺色模式">
+      <span class="toggle-icon" id="toggleIcon">☀</span>
+      <span id="toggleLabel">淺色</span>
+    </button>
+  </header>
+
+  <div class="grid-layout">
+
+    <!-- LEFT -->
+    <div class="card">
+      <div class="card-title">// 心靈格子牆</div>
+      <div class="contrib-months" id="monthLabels"></div>
+      <div class="contrib-cells" id="contribGrid"></div>
+      <div class="streak-row">
+        <div>
+          <div class="streak-num" id="streakNum">7</div>
+          <div class="streak-label">連續天數</div>
+        </div>
+        <div class="month-stat">
+          <div class="month-stat-label">本月完成</div>
+          <div class="month-stat-val" id="monthCount">12</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="card form-section">
+      <div class="form-header">
+        <div class="card-title" style="margin-bottom:0;">// 今日復盤記錄</div>
+        <div class="step-dots">
+          <div class="dot active" id="d1"></div>
+          <div class="dot" id="d2"></div>
+          <div class="dot" id="d3"></div>
+        </div>
+      </div>
+      <div>
+        <div class="step-label">STEP 01 — 今日能量指數</div>
+        <div class="energy-big" id="energyBig">5</div>
+        <div class="slider-meta"><span>耗盡</span><span>一般</span><span>爆表</span></div>
+        <input type="range" id="energySlider" min="1" max="10" value="5" aria-label="今日能量指數 1 到 10">
+      </div>
+      <div>
+        <div class="step-label">STEP 02 — 今日最大勝利</div>
+        <textarea class="win-textarea" id="winText" rows="3"
+          placeholder="今天最棒的一件事是什麼？不管多小，都算數 ..."
+          aria-label="今日最大勝利"></textarea>
+      </div>
+      <div>
+        <div class="step-label">STEP 03 — 午夜心情標籤</div>
+        <div class="mood-tags" role="group" aria-label="選擇心情">
+          <button class="mood-tag" data-mood="平靜" type="button">平靜</button>
+          <button class="mood-tag" data-mood="焦慮" type="button">焦慮</button>
+          <button class="mood-tag" data-mood="充實" type="button">充實</button>
+          <button class="mood-tag" data-mood="感恩" type="button">感恩</button>
+          <button class="mood-tag" data-mood="疲憊" type="button">疲憊</button>
+        </div>
+      </div>
+      <button class="submit-btn" id="submitBtn" type="button">◆ 送出復盤記錄</button>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card gem-panel">
+      <div class="card-title">// 精靈伴生</div>
+      <canvas id="pixelCanvas" width="200" height="200"
+              role="img" aria-label="根據心情生長的像素精靈"></canvas>
+      <div class="gem-name" id="gemName" style="color:var(--purple);text-shadow:0 0 10px var(--purple-glow);">蓄能水晶</div>
+      <div class="gem-hint">根據今日心情生長</div>
+      <div class="stats-block">
+        <div class="stat-row">
+          <span class="stat-lbl">精力</span>
+          <div class="stat-bar"><div class="stat-fill" id="eFill" style="width:50%;background:var(--cyan);"></div></div>
+          <span class="stat-val" id="eVal">5</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">完成</span>
+          <div class="stat-bar"><div class="stat-fill" id="cFill" style="width:0%;background:var(--purple);"></div></div>
+          <span class="stat-val" id="cVal">0%</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-title">復盤完成 ✦</div>
+  <div class="toast-sub">今日格子已點亮，精靈正在成長中...</div>
+</div>
+
+<script>
+// ── Theme ──
+function getActiveTheme() {
+  const saved = document.documentElement.dataset.theme;
+  if (saved === 'dark' || saved === 'light') return saved;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('er-theme', theme);
+  const isDark = theme === 'dark';
+  document.getElementById('toggleIcon').textContent  = isDark ? '☀' : '☽';
+  document.getElementById('toggleLabel').textContent = isDark ? '淺色' : '深色';
+}
+// Init: restore saved or follow system
+const saved = localStorage.getItem('er-theme');
+if (saved) {
+  applyTheme(saved);
+} else {
+  // No manual override — CSS media query handles visuals; just sync the button label
+  const sys = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  document.getElementById('toggleIcon').textContent  = sys === 'dark' ? '☀' : '☽';
+  document.getElementById('toggleLabel').textContent = sys === 'dark' ? '淺色' : '深色';
+}
+// Listen for system changes (only when no manual override)
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+  if (!localStorage.getItem('er-theme')) {
+    const sys = e.matches ? 'light' : 'dark';
+    document.getElementById('toggleIcon').textContent  = sys === 'dark' ? '☀' : '☽';
+    document.getElementById('toggleLabel').textContent = sys === 'dark' ? '淺色' : '深色';
+  }
+});
+document.getElementById('themeToggle').addEventListener('click', () => {
+  applyTheme(getActiveTheme() === 'dark' ? 'light' : 'dark');
+});
+
+// ── Date badge ──
+const now = new Date();
+const days = ['日','一','二','三','四','五','六'];
+document.getElementById('dateBadge').textContent =
+  `${now.getFullYear()} / ${String(now.getMonth()+1).padStart(2,'0')} / ${String(now.getDate()).padStart(2,'0')} · 週${days[now.getDay()]}`;
+
+// ── Contribution grid ──
+(function buildGrid() {
+  const WEEKS = 16, TOTAL = WEEKS * 7;
+  const today = new Date();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const filled = new Set();
+  for (let i = 0; i < 7; i++) filled.add(TOTAL - 1 - i);
+  for (let i = 7; i < TOTAL; i++) { if (Math.random() > 0.55) filled.add(i); }
+
+  const mlEl = document.getElementById('monthLabels');
+  for (let w = 0; w < WEEKS; w++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (WEEKS - 1 - w) * 7);
+    const span = document.createElement('span');
+    if (w === 0 || d.getDate() <= 7) span.textContent = months[d.getMonth()];
+    mlEl.appendChild(span);
+  }
+
+  const grid = document.getElementById('contribGrid');
+  let monthCount = 0;
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  for (let w = 0; w < WEEKS; w++) {
+    const col = document.createElement('div');
+    col.className = 'contrib-week';
+    for (let d = 0; d < 7; d++) {
+      const idx = w * 7 + d;
+      const cell = document.createElement('div');
+      cell.className = 'contrib-cell';
+      if (idx === TOTAL - 1) cell.classList.add('today');
+      if (filled.has(idx)) {
+        const lv = Math.random() > 0.5 ? 3 : Math.random() > 0.5 ? 2 : 1;
+        cell.classList.add(`lv${lv}`);
+        const cd = new Date(today);
+        cd.setDate(today.getDate() - (TOTAL - 1 - idx));
+        if (cd >= monthStart) monthCount++;
+      }
+      col.appendChild(cell);
+    }
+    grid.appendChild(col);
+  }
+  document.getElementById('monthCount').textContent = monthCount;
+})();
+
+// ── Pixel canvas ──
+const canvas = document.getElementById('pixelCanvas');
+const ctx    = canvas.getContext('2d');
+const SCALE  = 5, GW = 40, GH = 40;
+
+function px(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+}
+function shade(hex, factor) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgb(${Math.min(255,Math.round(r*factor))},${Math.min(255,Math.round(g*factor))},${Math.min(255,Math.round(b*factor))})`;
+}
+
+function drawCrystal(color, energy) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = 20, cy = 20, s = 0.65 + energy * 0.035;
+  const dark = shade(color, 0.4), bright = shade(color, 1.6);
+  const body = [
+    [0,-9],[0,-8],[-1,-7],[0,-7],[1,-7],[-2,-6],[-1,-6],[0,-6],[1,-6],[2,-6],
+    [-3,-5],[-2,-5],[-1,-5],[0,-5],[1,-5],[2,-5],[3,-5],
+    [-4,-4],[-3,-4],[-2,-4],[-1,-4],[0,-4],[1,-4],[2,-4],[3,-4],[4,-4],
+    [-4,-3],[-3,-3],[-2,-3],[-1,-3],[0,-3],[1,-3],[2,-3],[3,-3],[4,-3],
+    [-4,-2],[-3,-2],[-2,-2],[-1,-2],[0,-2],[1,-2],[2,-2],[3,-2],[4,-2],
+    [-4,-1],[-3,-1],[-2,-1],[-1,-1],[0,-1],[1,-1],[2,-1],[3,-1],[4,-1],
+    [-4,0],[-3,0],[-2,0],[-1,0],[0,0],[1,0],[2,0],[3,0],[4,0],
+    [-4,1],[-3,1],[-2,1],[-1,1],[0,1],[1,1],[2,1],[3,1],[4,1],
+    [-3,2],[-2,2],[-1,2],[0,2],[1,2],[2,2],[3,2],
+    [-2,3],[-1,3],[0,3],[1,3],[2,3],[-1,4],[0,4],[1,4],[0,5],
+  ];
+  const hiSet   = new Set(['-1,-1','0,-1','-1,0','0,0','-2,-2','-1,-2','0,-6','0,-7','0,-8','0,-9']);
+  const darkSet = new Set(['3,-3','4,-3','4,-2','4,-1','4,0','4,1','3,1','3,2','2,3','2,2','0,5']);
+  body.forEach(([dx,dy]) => {
+    const px_ = Math.round(cx + dx*s), py_ = Math.round(cy + dy*s);
+    if (px_ < 0 || px_ >= GW || py_ < 0 || py_ >= GH) return;
+    px(px_, py_, hiSet.has(`${dx},${dy}`) ? bright : darkSet.has(`${dx},${dy}`) ? dark : color);
+  });
+  if (energy >= 7) {
+    [[cx-7,cy-7],[cx+7,cy-6],[cx-8,cy+3],[cx+6,cy+7]].forEach(([sx,sy]) => {
+      if (sx >= 0 && sx < GW && sy >= 0 && sy < GH) px(sx, sy, bright);
+    });
+  }
+}
+
+function drawPlant(color, energy) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = 20, baseY = GH - 6, stemH = Math.floor(5 + energy * 0.9);
+  const dark = shade(color, 0.5), light = shade(color, 1.5);
+  const pot = '#4A3232', potHi = '#7A5252';
+  for (let x = cx-3; x <= cx+3; x++) { px(x, baseY+1, pot); px(x, baseY+2, pot); }
+  for (let x = cx-2; x <= cx+2; x++)   px(x, baseY+3, pot);
+  px(cx-4, baseY+1, potHi); px(cx-3, baseY+1, potHi);
+  for (let x = cx-2; x <= cx+2; x++) px(x, baseY, dark);
+  const stemC = '#2D5A27', stemHi = '#4A8C42';
+  for (let y = baseY-1; y >= baseY-stemH; y--) {
+    px(cx, y, stemC);
+    if (y % 3 === 0) px(cx, y, stemHi);
+  }
+  if (energy >= 3) {
+    const ly1 = baseY - Math.floor(stemH*0.45);
+    px(cx-1,ly1,color); px(cx-2,ly1-1,color); px(cx-1,ly1-1,light);
+    if (energy >= 5) { px(cx-3,ly1-1,color); px(cx-3,ly1,dark); }
+  }
+  if (energy >= 4) {
+    const ly2 = baseY - Math.floor(stemH*0.65);
+    px(cx+1,ly2,color); px(cx+2,ly2-1,color); px(cx+1,ly2-1,light);
+    if (energy >= 6) { px(cx+3,ly2-1,color); px(cx+3,ly2,dark); }
+  }
+  const topY = baseY - stemH - 1;
+  if (energy >= 5) {
+    px(cx,topY-1,light); px(cx-1,topY,color); px(cx+1,topY,color); px(cx,topY,light);
+    if (energy >= 7) {
+      px(cx,topY-2,light); px(cx-2,topY,color); px(cx+2,topY,color);
+      px(cx-1,topY-1,color); px(cx+1,topY-1,color);
+    }
+    if (energy >= 9) {
+      px(cx,topY-3,'#FBBF24'); px(cx-1,topY-2,'#FCD34D'); px(cx+1,topY-2,'#FCD34D');
+      px(cx-3,topY-1,light); px(cx+3,topY-1,light);
+    }
+  } else { px(cx, topY, color); }
+}
+
+const GEM_CFG = {
+  '平靜': { name:'紫霧晶體',     color:'#8B5CF6', glow:'rgba(139,92,246,0.4)',   type:'crystal' },
+  '焦慮': { name:'藍色蓄能水晶', color:'#3B82F6', glow:'rgba(59,130,246,0.5)',  type:'crystal' },
+  '充實': { name:'黃金生長植物', color:'#F59E0B', glow:'rgba(245,158,11,0.4)',  type:'plant'   },
+  '感恩': { name:'翠綠生機草',   color:'#10B981', glow:'rgba(16,185,129,0.5)', type:'plant'   },
+  '疲憊': { name:'灰岩礦石',     color:'#6B7280', glow:'rgba(107,114,128,0.4)',type:'crystal' },
+};
+
+function updateGem() {
+  const energy = parseInt(document.getElementById('energySlider').value);
+  const cfg = GEM_CFG[selectedMood] || { name:'蓄能水晶', color:'#8B5CF6', glow:'rgba(139,92,246,0.4)', type:'crystal' };
+  const el = document.getElementById('gemName');
+  el.textContent = cfg.name;
+  el.style.color = cfg.color;
+  el.style.textShadow = `0 0 10px ${cfg.glow}`;
+  cfg.type === 'plant' ? drawPlant(cfg.color, energy) : drawCrystal(cfg.color, energy);
+}
+
+// ── Slider ──
+const slider = document.getElementById('energySlider');
+slider.addEventListener('input', () => {
+  const v = slider.value;
+  const bigEl = document.getElementById('energyBig');
+  bigEl.textContent = v;
+  document.getElementById('eFill').style.width = (v * 10) + '%';
+  document.getElementById('eVal').textContent = v;
+  if      (v <= 3) { bigEl.style.color='var(--blue)'; bigEl.style.textShadow='0 0 15px rgba(59,130,246,0.5)'; document.getElementById('eFill').style.background='var(--blue)'; }
+  else if (v <= 7) { bigEl.style.color='var(--cyan)'; bigEl.style.textShadow='0 0 20px var(--cyan-glow)';     document.getElementById('eFill').style.background='var(--cyan)'; }
+  else             { bigEl.style.color='var(--gold)'; bigEl.style.textShadow='0 0 20px var(--gold-glow)';     document.getElementById('eFill').style.background='var(--gold)'; }
+  updateGem();
+});
+
+// ── Mood ──
+let selectedMood = null;
+document.querySelectorAll('.mood-tag').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mood-tag').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedMood = btn.dataset.mood;
+    updateGem();
+    updateCompletion();
+  });
+});
+
+// ── Completion ──
+function updateCompletion() {
+  const hasWin  = document.getElementById('winText').value.trim().length > 0;
+  const hasMood = selectedMood !== null;
+  const pct = Math.round((1 + (hasWin ? 1 : 0) + (hasMood ? 1 : 0)) / 3 * 100);
+  document.getElementById('cFill').style.width = pct + '%';
+  document.getElementById('cVal').textContent  = pct + '%';
+  document.getElementById('d1').className = 'dot done';
+  document.getElementById('d2').className = 'dot ' + (hasWin ? 'done' : 'active');
+  document.getElementById('d3').className = 'dot ' + (hasMood ? 'done' : hasWin ? 'active' : '');
+}
+document.getElementById('winText').addEventListener('input', () => {
+  document.getElementById('winText').classList.remove('error');
+  updateCompletion();
+});
+
+// ── Submit ──
+document.getElementById('submitBtn').addEventListener('click', () => {
+  const win  = document.getElementById('winText').value.trim();
+  if (!win)         { document.getElementById('winText').classList.add('error'); document.getElementById('winText').focus(); return; }
+  if (!selectedMood){ document.querySelectorAll('.mood-tag')[0].focus(); return; }
+
+  const cells = document.querySelectorAll('.contrib-cell');
+  cells[cells.length - 1].className = 'contrib-cell lv3 today';
+  const sEl = document.getElementById('streakNum');
+  sEl.textContent = parseInt(sEl.textContent) + 1;
+  canvas.style.filter = 'brightness(2) saturate(2)';
+  setTimeout(() => { canvas.style.filter = ''; }, 700);
+  document.getElementById('cFill').style.width = '100%';
+  document.getElementById('cVal').textContent  = '100%';
+  document.getElementById('d3').className = 'dot done';
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+});
+
+// ── Ambient glow ──
+let t = 0;
+(function glow() {
+  t += 0.025;
+  const i = 0.5 + Math.sin(t) * 0.5;
+  canvas.style.boxShadow = `0 0 ${8 + i*18}px rgba(139,92,246,${0.15 + i*0.25})`;
+  requestAnimationFrame(glow);
+})();
+
+updateGem();
+updateCompletion();
+</script>
+</body>
+</html>
