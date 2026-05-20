@@ -991,13 +991,41 @@ document.getElementById('dateBadge').textContent =
   `${now.getFullYear()} / ${String(now.getMonth()+1).padStart(2,'0')} / ${String(now.getDate()).padStart(2,'0')} · 週${days[now.getDay()]}`;
 
 // ── Contribution grid ──
-(function buildGrid() {
+// ── LocalStorage helpers ──
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function loadEntries() {
+  return JSON.parse(localStorage.getItem('er-entries') || '[]');
+}
+function saveEntry(entry) {
+  const list = loadEntries();
+  const i = list.findIndex(e => e.date === entry.date);
+  if (i >= 0) list[i] = entry; else list.push(entry);
+  localStorage.setItem('er-entries', JSON.stringify(list));
+  return list;
+}
+function calcStreak(entries) {
+  const set = new Set(entries.map(e => e.date));
+  const check = new Date();
+  if (!set.has(fmtDate(check))) check.setDate(check.getDate() - 1);
+  let n = 0;
+  while (set.has(fmtDate(check))) { n++; check.setDate(check.getDate() - 1); }
+  return n;
+}
+
+// ── Grid (rebuilt from real data each time) ──
+function buildGrid(entries) {
   const WEEKS = 16, TOTAL = WEEKS * 7;
   const today = new Date();
+  const todayStr = fmtDate(today);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const filled = new Set();
-  for (let i = 0; i < 7; i++) filled.add(TOTAL - 1 - i);
-  for (let i = 7; i < TOTAL; i++) { if (Math.random() > 0.55) filled.add(i); }
+  const entryMap = {};
+  entries.forEach(e => { entryMap[e.date] = e; });
+
+  // Clear previous render
+  document.getElementById('monthLabels').innerHTML = '';
+  document.getElementById('contribGrid').innerHTML = '';
 
   const mlEl = document.getElementById('monthLabels');
   for (let w = 0; w < WEEKS; w++) {
@@ -1011,27 +1039,35 @@ document.getElementById('dateBadge').textContent =
   const grid = document.getElementById('contribGrid');
   let monthCount = 0;
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
   for (let w = 0; w < WEEKS; w++) {
     const col = document.createElement('div');
     col.className = 'contrib-week';
     for (let d = 0; d < 7; d++) {
       const idx = w * 7 + d;
+      const cellDate = new Date(today);
+      cellDate.setDate(today.getDate() - (TOTAL - 1 - idx));
+      const ds = fmtDate(cellDate);
+
       const cell = document.createElement('div');
       cell.className = 'contrib-cell';
-      if (idx === TOTAL - 1) cell.classList.add('today');
-      if (filled.has(idx)) {
-        const lv = Math.random() > 0.5 ? 3 : Math.random() > 0.5 ? 2 : 1;
+      if (ds === todayStr) cell.classList.add('today');
+
+      if (entryMap[ds]) {
+        const lv = entryMap[ds].energy <= 3 ? 1 : entryMap[ds].energy <= 6 ? 2 : 3;
         cell.classList.add(`lv${lv}`);
-        const cd = new Date(today);
-        cd.setDate(today.getDate() - (TOTAL - 1 - idx));
-        if (cd >= monthStart) monthCount++;
+        if (cellDate >= monthStart) monthCount++;
       }
       col.appendChild(cell);
     }
     grid.appendChild(col);
   }
+
   document.getElementById('monthCount').textContent = monthCount;
-})();
+  document.getElementById('streakNum').textContent  = calcStreak(entries);
+}
+
+buildGrid(loadEntries());
 
 // ── Pixel canvas ──
 const canvas = document.getElementById('pixelCanvas');
@@ -1181,10 +1217,11 @@ document.getElementById('submitBtn').addEventListener('click', () => {
   if (!win)         { document.getElementById('winText').classList.add('error'); document.getElementById('winText').focus(); return; }
   if (!selectedMood){ document.querySelectorAll('.mood-tag')[0].focus(); return; }
 
-  const cells = document.querySelectorAll('.contrib-cell');
-  cells[cells.length - 1].className = 'contrib-cell lv3 today';
-  const sEl = document.getElementById('streakNum');
-  sEl.textContent = parseInt(sEl.textContent) + 1;
+  // Save to localStorage and rebuild grid
+  const energy  = parseInt(document.getElementById('energySlider').value);
+  const entries = saveEntry({ date: fmtDate(new Date()), energy, win, mood: selectedMood });
+  buildGrid(entries);
+
   canvas.style.filter = 'brightness(2) saturate(2)';
   setTimeout(() => { canvas.style.filter = ''; }, 700);
   document.getElementById('cFill').style.width = '100%';
