@@ -33,6 +33,33 @@
 - 純 HTML + CSS + JavaScript（無框架）
 - 單一 index.html 入口
 
+## 設計系統（Design System）
+
+### 互動元件規範
+
+#### 輸入框 Focus 狀態 — 極光邊框
+```css
+/* 預設：無邊框，Neumorphism 內凹陰影 */
+border: 1px solid transparent;
+box-shadow: inset 4px 4px 8px var(--shadow-dark),
+            inset -2px -2px 6px var(--shadow-light);
+transition: box-shadow 0.4s ease, border-color 0.4s ease;
+
+/* Focus 啟動：青藍色三層極光 */
+border-color: var(--cyan);          /* 實線邊框 */
+box-shadow:
+  inset 4px 4px 8px var(--shadow-dark),
+  inset -2px -2px 6px var(--shadow-light),
+  0 0 0 2px var(--cyan-glow),       /* 第一層：緊貼邊框光暈 */
+  0 0 12px var(--cyan-glow),        /* 第二層：中距離散射 */
+  0 0 24px rgba(6,182,212,0.15);    /* 第三層：遠距離大氣光 */
+```
+- 顏色：`var(--cyan)` = 深色 `#06B6D4` / 淺色 `#0891B2`
+- 過渡時間：`0.4s ease`
+- 適用元件：所有文字輸入框（textarea、input[type=text]）
+
+---
+
 ## 語言偏好
 - 繁體中文回覆
 - 禁止第一/第二人稱代名詞（摘要任務）
